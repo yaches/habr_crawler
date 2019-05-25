@@ -6,8 +6,8 @@ type TaskManagerChan struct {
 	ch chan Task
 }
 
-func NewTaskManagerChan() TaskManagerChan {
-	return TaskManagerChan{ch: make(chan Task, 1000)}
+func NewTaskManagerChan() *TaskManagerChan {
+	return &TaskManagerChan{ch: make(chan Task, 1000)}
 }
 
 func (tm *TaskManagerChan) Push(tasks []Task) (int, error) {

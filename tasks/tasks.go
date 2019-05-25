@@ -3,8 +3,8 @@ package tasks
 type TaskType int
 
 const (
-	UserTask      TaskType = 0
-	PostTask      TaskType = 1
+	PostTask      TaskType = 0
+	UserTask      TaskType = 1
 	UserPostsTask TaskType = 2
 )
 

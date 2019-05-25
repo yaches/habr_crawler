@@ -9,4 +9,5 @@ type Post struct {
 	Title   string
 	Text    string
 	Tags    []string
+	Hubs    []string
 }

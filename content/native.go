@@ -1,4 +1,4 @@
-package contentstore
+package content
 
 import "github.com/yaches/habr_crawler/models"
 
@@ -8,8 +8,12 @@ type StorageNative struct {
 	comments []models.Comment
 }
 
-func NewStorageNative() StorageNative {
-	return StorageNative{}
+func NewStorageNative() *StorageNative {
+	return &StorageNative{
+		users:    []models.User{},
+		posts:    []models.Post{},
+		comments: []models.Comment{},
+	}
 }
 
 func (cs *StorageNative) AddUsers(users []models.User) error {

@@ -1,4 +1,4 @@
-package contentstore
+package content
 
 import "github.com/yaches/habr_crawler/models"
 
