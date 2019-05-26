@@ -39,18 +39,6 @@ func (w *Worker) Work(maxDeep int) {
 			return
 		}
 
-		// check task already complete
-		// if task.Type != tasks.UserPostsTask {
-		// 	ok, err := state.Exists(task.Body)
-		// 	if err != nil {
-		// 		log.Print(err.Error)
-		// 		continue
-		// 	}
-		// 	if ok {
-		// 		continue
-		// 	}
-		// }
-
 		// convert task to url
 		url, err := URLFromTask(task)
 		if err != nil {
@@ -73,17 +61,28 @@ func (w *Worker) Work(maxDeep int) {
 			continue
 		}
 
-		log.Println(newTasks)
-		return
+		tasksSl := []tasks.Task{}
+		for t := range newTasks {
+			exists, err := w.state.Exists(t)
+			if err != nil {
+				log.Println("Can't check task exists:", err)
+				continue
+			}
+			if !exists {
+				err = w.state.Add(t)
+				if err != nil {
+					log.Println("Can't add task to state store:", err)
+					continue
+				}
+				tasksSl = append(tasksSl, t)
+			}
+		}
 
-		// parse html
-
-		// save to content storage
-
-		// extract new tasks
-
-		// check tasks exists
-		// push tasks to queue
+		_, err = w.queue.Push(tasksSl)
+		if err != nil {
+			log.Println("Can't push tasks to queue:", err)
+			continue
+		}
 	}
 }
 
@@ -105,6 +104,7 @@ func (w *Worker) processPost(task tasks.Task, r io.Reader) (map[tasks.Task]struc
 	newTasks := map[tasks.Task]struct{}{}
 
 	post, comments, err := parsePost(r)
+	post.ID = task.Body
 	if err != nil {
 		return newTasks, err
 	}

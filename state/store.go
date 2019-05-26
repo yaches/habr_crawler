@@ -1,6 +1,10 @@
 package state
 
+import (
+	"github.com/yaches/habr_crawler/tasks"
+)
+
 type Storage interface {
-	Exists(string) (bool, error)
-	Add(string) error
+	Exists(tasks.Task) (bool, error)
+	Add(tasks.Task) error
 }
