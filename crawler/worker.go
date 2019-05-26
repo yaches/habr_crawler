@@ -2,15 +2,12 @@ package crawler
 
 import (
 	"errors"
+	"io"
 	"log"
 	"net/http"
-	"time"
-
-	"github.com/yaches/habr_crawler/models"
-
-	"github.com/PuerkitoBio/goquery"
 
 	"github.com/yaches/habr_crawler/content"
+	"github.com/yaches/habr_crawler/models"
 	"github.com/yaches/habr_crawler/state"
 	"github.com/yaches/habr_crawler/tasks"
 )
@@ -29,14 +26,18 @@ func NewWorker(cnt content.Storage, state state.Storage, queue tasks.TaskManager
 	}
 }
 
-func (w *Worker) Work() {
+func (w *Worker) Work(maxDeep int) {
 	for true {
 		// get task from queue
 		tasksSlice, err := w.queue.Pop(1)
 		if err != nil {
-			log.Printf("Can't pop tasks from queue")
+			log.Printf("Can't pop tasks from queue: %v", err)
+			continue
 		}
 		task := tasksSlice[0]
+		if task.Deep > maxDeep {
+			return
+		}
 
 		// check task already complete
 		// if task.Type != tasks.UserPostsTask {
@@ -65,16 +66,11 @@ func (w *Worker) Work() {
 		}
 		defer resp.Body.Close()
 
-		doc, err := goquery.NewDocumentFromReader(resp.Body)
-		if err != nil {
-			log.Println(err.Error())
-			continue
-		}
-
 		// process task
-		newTasks, err := w.process(task, doc.Find("*"))
+		newTasks, err := w.process(task, resp.Body)
 		if err != nil {
 			log.Println(err)
+			continue
 		}
 
 		log.Println(newTasks)
@@ -91,113 +87,70 @@ func (w *Worker) Work() {
 	}
 }
 
-func (w *Worker) process(task tasks.Task, sel *goquery.Selection) ([]tasks.Task, error) {
+func (w *Worker) process(task tasks.Task, r io.Reader) (map[tasks.Task]struct{}, error) {
 	switch task.Type {
 	case tasks.PostTask:
-		return w.processPost(task, sel)
+		return w.processPost(task, r)
 	case tasks.UserTask:
-		return w.processUser(task, sel)
+		return w.processUser(task, r)
 	case tasks.UserPostsTask:
-		return w.processUserPosts(task, sel)
+		return w.processUserPosts(task, r)
 	}
 	return nil, errors.New("Undefined task type")
 }
 
 // Extract tasks for: post author, comments authors;
 // Save content: post, comments
-func (w *Worker) processPost(task tasks.Task, sel *goquery.Selection) ([]tasks.Task, error) {
-	newTasks := []tasks.Task{}
-	post := models.Post{ID: task.Body}
+func (w *Worker) processPost(task tasks.Task, r io.Reader) (map[tasks.Task]struct{}, error) {
+	newTasks := map[tasks.Task]struct{}{}
 
-	// Get and parse user URL
-	url, ok := sel.Find(".post__meta a").Attr("href")
-	if ok {
-		// All new tasks takes incrementing deep from PostTask
-		authorName, authorTasks, err := tasksFromUserURL(task.Deep+1, url)
-		if err != nil {
-			log.Println(err)
-		}
-		newTasks = append(newTasks, authorTasks...)
-		post.Author = authorName
-	} else {
-		log.Println("Can't get author url from post page")
+	post, comments, err := parsePost(r)
+	if err != nil {
+		return newTasks, err
 	}
 
-	// Get post pub time
-	pubTimeStr, ok := sel.Find(".post__meta .post__time").Attr("data-time_published")
-	if ok {
-		pubTime, err := parseTime(pubTimeStr)
-		if err != nil {
-			log.Println(err)
-		}
-		post.PubDate = pubTime
-	} else {
-		log.Println("Can't get post pub time")
+	newTasks[tasks.Task{
+		Type: tasks.UserTask,
+		Body: post.Author,
+		Deep: task.Deep + 1,
+	}] = struct{}{}
+	newTasks[tasks.Task{
+		Type: tasks.UserPostsTask,
+		Body: post.Author,
+		Deep: task.Deep + 1,
+		Page: 1,
+	}] = struct{}{}
+	for _, com := range comments {
+		newTasks[tasks.Task{
+			Type: tasks.UserTask,
+			Body: com.Author,
+			Deep: task.Deep + 1,
+		}] = struct{}{}
+		newTasks[tasks.Task{
+			Type: tasks.UserPostsTask,
+			Body: com.Author,
+			Deep: task.Deep + 1,
+			Page: 1,
+		}] = struct{}{}
 	}
 
-	// Get post title
-	post.Title = sel.Find(".post__title-text").Text()
-	if post.Title == "" {
-		log.Println("Can't get post title")
+	err = w.cnt.AddPosts([]models.Post{post})
+	if err != nil {
+		log.Println(err)
 	}
-
-	// Get post hubs
-	post.Hubs = []string{}
-	sel.Find(".inline-list__item_hub a").Each(func(i int, s *goquery.Selection) {
-		if t := s.Text(); t != "" {
-			post.Hubs = append(post.Hubs, t)
-		}
-	})
-
-	// Get post tags
-	post.Tags = []string{}
-	sel.Find(".inline-list_fav-tags a").Each(func(i int, s *goquery.Selection) {
-		if t := s.Text(); t != "" {
-			post.Tags = append(post.Tags, t)
-		}
-	})
-
-	// Get post body
-	post.Text = sel.Find(".post__text").Text()
-	if post.Text == "" {
-		log.Println("Can't get post text")
+	err = w.cnt.AddComments(comments)
+	if err != nil {
+		log.Println(err)
 	}
-
-	log.Println(post)
 
 	return newTasks, nil
 }
 
-func tasksFromUserURL(deep int, url string) (string, []tasks.Task, error) {
-	newTasks := []tasks.Task{}
-	// Create 2 tasks: UserTask and UserPostsTask{page=1}
-	authorTask, err := TaskFromURL(url)
-	if err == nil {
-		authorTask.Deep = deep
-		authorPostsTask := tasks.Task{
-			Type: tasks.UserPostsTask,
-			Body: authorTask.Body,
-			Deep: deep,
-			Page: 1,
-		}
-
-		newTasks = append(newTasks, authorTask)
-		newTasks = append(newTasks, authorPostsTask)
-	}
-	return authorTask.Body, newTasks, err
-}
-
-func (w *Worker) processUser(task tasks.Task, sel *goquery.Selection) ([]tasks.Task, error) {
+func (w *Worker) processUser(task tasks.Task, r io.Reader) (map[tasks.Task]struct{}, error) {
 	return nil, nil
 }
 
-func (w *Worker) processUserPosts(task tasks.Task, sel *goquery.Selection) ([]tasks.Task, error) {
-	return nil, nil
-}
+func (w *Worker) processUserPosts(task tasks.Task, r io.Reader) (map[tasks.Task]struct{}, error) {
 
-func parseTime(t string) (time.Time, error) {
-	if t == "" {
-		return time.Time{}, errors.New("Empty time string")
-	}
-	return time.Parse("2006-01-02T15:04Z07:00", t)
+	return nil, nil
 }

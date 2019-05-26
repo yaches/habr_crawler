@@ -17,6 +17,6 @@ var crawlCommand = &cobra.Command{
 		queue := tasks.NewTaskManagerChan()
 		worker := crawler.NewWorker(cntStorage, stateStorage, queue)
 		queue.Push([]tasks.Task{tasks.Task{Type: tasks.PostTask, Body: "197598"}})
-		worker.Work()
+		worker.Work(5)
 	},
 }
