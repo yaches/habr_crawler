@@ -11,4 +11,5 @@ type Post struct {
 	Tags          []string
 	Hubs          []string
 	CommentsCount int
+	Rating        int
 }

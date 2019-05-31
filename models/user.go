@@ -14,7 +14,6 @@ type User struct {
 	SubscribeCompanies []string
 	Invites            []string
 	InvitedBy          string
-	InvitedDate        time.Time
 	Karma              float32
 	Rating             float32
 	Subscribers        int

@@ -1,5 +1,9 @@
 package tasks
 
+import (
+	"fmt"
+)
+
 type TaskType int
 
 const (
@@ -17,7 +21,19 @@ type Task struct {
 	Page int
 }
 
-type TaskManager interface {
-	Push([]Task) (int, error)
-	Pop(int) ([]Task, error)
+type Manager interface {
+	Channel() <-chan Task
+	Push(Task) error
+}
+
+const fstr = "%d;%s;%d;%d"
+
+func Encode(task Task) (string, error) {
+	return fmt.Sprintf(fstr, task.Type, task.Body, task.Deep, task.Page), nil
+}
+
+func Decode(str string) (Task, error) {
+	task := Task{}
+	_, err := fmt.Sscanf(str, fstr, &task.Type, &task.Body, &task.Deep, &task.Page)
+	return task, err
 }
