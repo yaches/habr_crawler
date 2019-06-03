@@ -1,6 +1,9 @@
 package content
 
-import "github.com/yaches/habr_crawler/models"
+import (
+	"github.com/yaches/habr_crawler/models"
+	"github.com/yaches/habr_crawler/models/aggs"
+)
 
 type Storage interface {
 	AddUsers([]models.User) error
@@ -11,4 +14,6 @@ type Storage interface {
 
 	AddComments([]models.Comment) error
 	GetAllComments() ([]models.Comment, error)
+
+	GetCommonInfo() (aggs.CommonInfo, error)
 }

@@ -16,3 +16,7 @@ func (m *ManagerNative) Push(task Task) error {
 	m.ch <- task
 	return nil
 }
+
+func (m *ManagerNative) Done(task Task) error {
+	return nil
+}

@@ -1,16 +1,33 @@
 package cmd
 
 import (
+	"fmt"
+
+	"github.com/go-redis/redis"
 	"github.com/spf13/cobra"
-	"github.com/yaches/habr_crawler/state"
 	"github.com/yaches/habr_crawler/tasks"
+	"go.uber.org/zap"
 )
 
 var helloCommand = &cobra.Command{
 	Use: "hello",
 	Run: func(cmd *cobra.Command, argv []string) {
-		s := state.NewStorageRedis()
-		defer s.Close()
-		s.Add(tasks.Task{tasks.UserTask, "azaza", 0, 19})
+		db := redis.NewClient(&redis.Options{})
+
+		queue := tasks.NewManagerRedis(db)
+		err := queue.Fill()
+		if err != nil {
+			zap.L().Debug("", zap.Error(err))
+		}
+
+		b := true
+		for b {
+			select {
+			case t := <-queue.Channel():
+				zap.L().Debug(fmt.Sprint(t))
+			default:
+				b = false
+			}
+		}
 	},
 }

@@ -24,16 +24,17 @@ type Task struct {
 type Manager interface {
 	Channel() <-chan Task
 	Push(Task) error
+	Done(Task) error
 }
 
-const fstr = "%d;%s;%d;%d"
+const fstr = "%d;%d;%s"
 
 func Encode(task Task) (string, error) {
-	return fmt.Sprintf(fstr, task.Type, task.Body, task.Deep, task.Page), nil
+	return fmt.Sprintf(fstr, task.Type, task.Page, task.Body), nil
 }
 
 func Decode(str string) (Task, error) {
 	task := Task{}
-	_, err := fmt.Sscanf(str, fstr, &task.Type, &task.Body, &task.Deep, &task.Page)
+	_, err := fmt.Sscanf(str, fstr, &task.Type, &task.Page, &task.Body)
 	return task, err
 }

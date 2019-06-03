@@ -10,6 +10,7 @@ import (
 func init() {
 	rootCmd.AddCommand(helloCommand)
 	rootCmd.AddCommand(crawlCommand)
+	rootCmd.AddCommand(infoCommand)
 }
 
 var rootCmd = &cobra.Command{}

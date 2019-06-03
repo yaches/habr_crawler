@@ -2,42 +2,29 @@ package tasks
 
 import (
 	"github.com/go-redis/redis"
+	"go.uber.org/zap"
 )
 
 const (
 	channel = "habr_tasks"
-	bufSz   = 1000000000000
+	bufSz   = 100000000
 )
 
 type ManagerRedis struct {
-	t_ch chan Task
-	r_ch <-chan *redis.Message
-	db   *redis.Client
+	ch chan Task
+	db *redis.Client
 }
 
 func NewManagerRedis(db *redis.Client) *ManagerRedis {
 	m := &ManagerRedis{
-		db:   db,
-		r_ch: db.Subscribe(channel).ChannelSize(bufSz),
-		t_ch: make(chan Task, bufSz),
+		db: db,
+		ch: make(chan Task, bufSz),
 	}
-
-	go func() {
-		for {
-			mes := <-m.r_ch
-			task, err := Decode(mes.Payload)
-			if err != nil {
-				continue
-			}
-			m.t_ch <- task
-		}
-	}()
-
 	return m
 }
 
 func (m *ManagerRedis) Channel() <-chan Task {
-	return m.t_ch
+	return m.ch
 }
 
 func (m *ManagerRedis) Push(task Task) error {
@@ -45,5 +32,57 @@ func (m *ManagerRedis) Push(task Task) error {
 	if err != nil {
 		return err
 	}
-	return m.db.Publish(channel, str).Err()
+
+	exRes, err := m.db.Exists(str).Result()
+	if err != nil {
+		return err
+	}
+
+	if exRes == 0 {
+		err = m.db.Set(str, "0", 0).Err()
+		if err != nil {
+			return err
+		}
+		m.ch <- task
+	}
+
+	return nil
+}
+
+func (m *ManagerRedis) Done(task Task) error {
+	str, err := Encode(task)
+	if err != nil {
+		return err
+	}
+
+	return m.db.Set(str, "1", 0).Err()
+}
+
+func (m *ManagerRedis) Fill() error {
+	var cur uint64
+	for {
+		r := m.db.Scan(cur, "*", 1000)
+		if r.Err() != nil {
+			return r.Err()
+		}
+		for i := r.Iterator(); i.Next(); {
+			v, err := m.db.Get(i.Val()).Result()
+			if err != nil || i.Err() != nil {
+				zap.L().Warn("Redis:", zap.Error(err), zap.Error(i.Err()))
+				continue
+			}
+			if v == "0" {
+				task, err := Decode(i.Val())
+				if err != nil {
+					zap.L().Warn("", zap.Error(err))
+					continue
+				}
+				m.ch <- task
+			}
+		}
+		if cur == 0 {
+			break
+		}
+	}
+	return nil
 }

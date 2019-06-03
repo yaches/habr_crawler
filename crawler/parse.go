@@ -115,7 +115,7 @@ func parsePost(r io.Reader) (models.Post, []models.Comment, error) {
 	}
 
 	// Get rating
-	rate, err := strconv.ParseInt(sel.Find(".post-additionals").Find(".voting-wjt__counter").Text(), 10, 32)
+	rate, err := strconv.ParseInt(strings.ReplaceAll(sel.Find(".post-additionals").Find(".voting-wjt__counter").Text(), "–", "-"), 10, 32)
 	if err != nil {
 		zap.L().Warn("Can't parse post rating", zap.Error(err))
 	}
@@ -146,6 +146,12 @@ func parsePost(r io.Reader) (models.Post, []models.Comment, error) {
 			zap.L().Warn("Can't get comment pub date", zap.Error(err))
 		}
 		comment.PubDate = t
+
+		rate, err := strconv.ParseInt(strings.ReplaceAll(sel.Find(".voting-wjt_comments .voting-wjt__counter").First().Text(), "–", "-"), 10, 32)
+		if err != nil {
+			zap.L().Warn("Can't parse comment rating", zap.Error(err))
+		}
+		comment.Rating = int(rate)
 
 		comment.Text = s.Find(".comment__message").First().Text()
 		if comment.Text == "" {

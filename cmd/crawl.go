@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"net/http"
+	"strconv"
+
 	"github.com/go-redis/redis"
 	"github.com/yaches/habr_crawler/content"
 	"github.com/yaches/habr_crawler/crawler"
-	"github.com/yaches/habr_crawler/state"
 	"github.com/yaches/habr_crawler/tasks"
 	"go.uber.org/zap"
+	"golang.org/x/net/proxy"
 
 	"github.com/spf13/cobra"
 )
@@ -24,21 +27,47 @@ func init() {
 var crawlCommand = &cobra.Command{
 	Use: "crawl",
 	Run: func(cmd *cobra.Command, argv []string) {
+
+		dialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9050", nil, proxy.Direct)
+		if err != nil {
+			zap.L().Fatal("Can't connect to the proxy", zap.Error(err))
+		}
+		httpTransport := &http.Transport{Dial: dialer.Dial}
+		httpClient := &http.Client{Transport: httpTransport}
+		// httpClient := &http.Client{}
+
 		db := redis.NewClient(&redis.Options{})
 
 		cntStorage, err := content.NewStorageES()
 		if err != nil {
 			zap.L().Fatal(err.Error())
 		}
-		stateStorage := state.NewStorageRedis(db)
 		queue := tasks.NewManagerRedis(db)
-		worker := crawler.NewWorker(cntStorage, stateStorage, queue)
-		// queue.Channel() <- tasks.Task{Type: tasks.PostTask, Body: "453626"}
-		queue.Push(tasks.Task{Type: tasks.PostTask, Body: "453596"})
+		worker := crawler.NewWorker(cntStorage, queue, httpClient)
+		// err = queue.Push(tasks.Task{Type: tasks.PostTask, Body: "460000"})
+		err = queue.Fill()
+		if err != nil {
+			zap.L().Fatal(err.Error())
+		}
+		zap.L().Info("Got new tasks", zap.Int("count", len(queue.Channel())))
+		// postsIterate(queue)
 
 		worker.Start(threads, maxDeep)
-
-		// users, _ := cntStorage.GetAllUsers()
-		// fmt.Println(users)
 	},
+}
+
+func postsIterate(queue tasks.Manager) {
+	zap.L().Info("Posts iterating started")
+	for i := 0; i < 460000; i++ {
+		task := tasks.Task{
+			Type: tasks.PostTask,
+			Body: strconv.Itoa(i),
+		}
+		zap.L().Info("Pushing", zap.Int("i", i))
+		err := queue.Push(task)
+		if err != nil {
+			zap.L().Warn("", zap.Error(err))
+		}
+	}
+	zap.L().Info("Posts iterating stopped")
 }
