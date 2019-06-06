@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/yaches/habr_crawler/content"
+	"github.com/yaches/habr_crawler/printer"
 	"go.uber.org/zap"
 )
 
@@ -13,7 +12,7 @@ var (
 )
 
 func init() {
-	crawlCommand.Flags().StringVarP(&user, "user", "u", "", "Habr user")
+	infoCommand.Flags().StringVarP(&user, "user", "u", "", "Habr user")
 }
 
 var infoCommand = &cobra.Command{
@@ -28,6 +27,6 @@ var infoCommand = &cobra.Command{
 			zap.L().Fatal("", zap.Error(err))
 		}
 
-		fmt.Print(i)
+		printer.PrintCommons(i)
 	},
 }
