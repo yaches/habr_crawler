@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/yaches/habr_crawler/content"
 	"github.com/yaches/habr_crawler/printer"
@@ -8,11 +10,15 @@ import (
 )
 
 var (
-	user string
+	infoIndex string
+	postID    string
+	username  string
 )
 
 func init() {
-	infoCommand.Flags().StringVarP(&user, "user", "u", "", "Habr user")
+	infoCommand.Flags().StringVarP(&infoIndex, "index", "i", "posts", "Data index")
+	infoCommand.Flags().StringVarP(&postID, "post", "p", "1", "Post ID")
+	infoCommand.Flags().StringVarP(&username, "username", "u", "bobuk", "Username")
 }
 
 var infoCommand = &cobra.Command{
@@ -22,11 +28,20 @@ var infoCommand = &cobra.Command{
 		if err != nil {
 			zap.L().Fatal("", zap.Error(err))
 		}
-		i, err := cntStorage.GetCommonInfo()
-		if err != nil {
-			zap.L().Fatal("", zap.Error(err))
-		}
 
-		printer.PrintCommons(i)
+		if infoIndex == "users" {
+			u, err := cntStorage.GetUser(username)
+			if err != nil {
+				zap.L().Fatal("", zap.Error(err))
+			}
+			printer.PrintUser(u)
+		}
+		if infoIndex == "posts" {
+			p, err := cntStorage.GetPost(postID)
+			if err != nil {
+				zap.L().Fatal("", zap.Error(err))
+			}
+			fmt.Printf("%+v\n", p)
+		}
 	},
 }

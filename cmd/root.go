@@ -8,9 +8,11 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(helloCommand)
 	rootCmd.AddCommand(crawlCommand)
 	rootCmd.AddCommand(infoCommand)
+	rootCmd.AddCommand(histCommand)
+	rootCmd.AddCommand(hubsCommand)
+	rootCmd.AddCommand(tagsCommand)
 }
 
 var rootCmd = &cobra.Command{}
